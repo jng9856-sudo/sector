@@ -1,8 +1,8 @@
 {
   "functions": {
-    "api/prices.js": {
-      "maxDuration": 30
-    }
+    "api/prices.js":  { "maxDuration": 30 },
+    "api/nasdaq.js":  { "maxDuration": 30 },
+    "api/stocks.js":  { "maxDuration": 30 }
   },
   "headers": [
     {
