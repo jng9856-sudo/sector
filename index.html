@@ -1,0 +1,1094 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>섹터 순환매 모니터</title>
+  <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:      #0d1117;
+      --bg-mid:  #161b22;
+      --bg-card: #1c2128;
+      --border:  #30363d;
+      --text:    #e6edf3;
+      --muted:   #8b949e;
+      --accent:  #1f6feb;
+      --green:   #3fb950;
+      --red:     #f85149;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: "Segoe UI", "Malgun Gothic", sans-serif;
+      min-height: 100vh;
+    }
+
+    /* ── 헤더 */
+    header {
+      padding: 18px 28px 14px;
+      background: var(--bg);
+      border-bottom: 1px solid var(--border);
+    }
+    header h1 { font-size: 20px; font-weight: 700; letter-spacing: -0.3px; }
+    header p  { font-size: 12px; color: var(--muted); margin-top: 4px; }
+
+    /* ── 컨트롤 바 */
+    #controls {
+      display: flex;
+      align-items: center;
+      gap: 24px;
+      padding: 14px 28px;
+      background: var(--bg-mid);
+      border-bottom: 1px solid var(--border);
+      flex-wrap: wrap;
+    }
+    .ctrl-group { display: flex; flex-direction: column; gap: 4px; }
+    .ctrl-group label { font-size: 11px; color: var(--muted); }
+    .period-btns { display: flex; gap: 6px; }
+    .period-btn {
+      padding: 5px 14px;
+      border-radius: 20px;
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--muted);
+      font-size: 12px;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .period-btn:hover   { border-color: var(--accent); color: var(--text); }
+    .period-btn.active  { background: var(--accent); border-color: var(--accent); color: #fff; }
+    #refresh-btn {
+      padding: 8px 20px;
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity 0.15s;
+    }
+    #refresh-btn:hover   { opacity: 0.85; }
+    #refresh-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    #last-update { font-size: 11px; color: var(--muted); align-self: center; }
+
+    /* ── 탭 */
+    #tabs {
+      display: flex;
+      background: var(--bg-mid);
+      border-bottom: 1px solid var(--border);
+      overflow-x: auto;
+    }
+    .tab-btn {
+      padding: 11px 22px;
+      border: none;
+      border-bottom: 2px solid transparent;
+      background: transparent;
+      color: var(--muted);
+      font-size: 13px;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: color 0.15s;
+    }
+    .tab-btn:hover  { color: var(--text); }
+    .tab-btn.active { color: var(--text); border-bottom-color: var(--accent); }
+
+    /* ── 콘텐츠 */
+    #content { padding: 22px 28px; }
+
+    .tab-pane { display: none; }
+    .tab-pane.active { display: block; }
+
+    /* ── 로딩 / 에러 */
+    #loader {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 14px;
+      padding: 80px 0;
+      color: var(--muted);
+      font-size: 14px;
+    }
+    .spinner {
+      width: 36px; height: 36px;
+      border: 3px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── 팁 박스 */
+    .tip {
+      margin-top: 12px;
+      padding: 11px 15px;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      font-size: 12px;
+      color: var(--muted);
+      line-height: 1.75;
+    }
+
+    /* ── 랭킹 테이블 */
+    #ranking-table-wrap { overflow-x: auto; margin-top: 4px; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    thead th {
+      background: var(--bg-mid);
+      color: var(--muted);
+      font-weight: 600;
+      padding: 10px 14px;
+      text-align: center;
+      border: 1px solid var(--border);
+      white-space: nowrap;
+    }
+    tbody td {
+      background: var(--bg);
+      padding: 10px 14px;
+      text-align: center;
+      border: 1px solid var(--border);
+    }
+    tbody tr:nth-child(1) td { background: rgba(63,185,80,0.09); }
+    tbody tr:nth-child(2) td { background: rgba(63,185,80,0.05); }
+    tbody tr:nth-child(3) td { background: rgba(63,185,80,0.03); }
+    td.name-cell { text-align: left; font-weight: 600; }
+    td.pos { color: #69db8f; font-weight: 600; }
+    td.neg { color: #f58579; font-weight: 600; }
+
+    /* ── 나스닥 탭 */
+    .market-banner {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 10px 16px;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      margin-bottom: 16px;
+      flex-wrap: wrap;
+    }
+    .status-badge {
+      font-size: 11px;
+      font-weight: 700;
+      padding: 4px 10px;
+      border-radius: 20px;
+      letter-spacing: 0.5px;
+    }
+    .status-open       { background: rgba(63,185,80,0.18);  color: #3fb950; border: 1px solid rgba(63,185,80,0.4); }
+    .status-premarket  { background: rgba(255,152,0,0.15);  color: #ffa726; border: 1px solid rgba(255,152,0,0.4); }
+    .status-afterhours { background: rgba(33,150,243,0.15); color: #42a5f5; border: 1px solid rgba(33,150,243,0.4); }
+    .status-closed     { background: rgba(139,148,158,0.15);color: #8b949e; border: 1px solid rgba(139,148,158,0.4); }
+    .live-dot {
+      display: inline-block;
+      width: 7px; height: 7px;
+      background: #3fb950;
+      border-radius: 50%;
+      margin-right: 5px;
+      animation: pulse 1.5s ease-in-out infinite;
+    }
+    @keyframes pulse {
+      0%,100% { opacity: 1; transform: scale(1); }
+      50%      { opacity: 0.4; transform: scale(0.85); }
+    }
+    .countdown { font-size: 11px; color: var(--muted); margin-left: auto; }
+
+    .quote-cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+    .quote-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 14px 16px;
+      transition: border-color 0.2s;
+    }
+    .quote-card:hover { border-color: var(--accent); }
+    .qc-label { font-size: 11px; color: var(--muted); margin-bottom: 4px; }
+    .qc-name  { font-size: 12px; color: var(--muted); margin-bottom: 6px; }
+    .qc-price { font-size: 22px; font-weight: 700; letter-spacing: -0.5px; }
+    .qc-change { font-size: 13px; margin-top: 4px; font-weight: 600; }
+    .qc-sub   { font-size: 11px; color: var(--muted); margin-top: 6px; line-height: 1.6; }
+    .qc-ext   { font-size: 11px; margin-top: 5px; padding-top: 5px;
+                 border-top: 1px solid var(--border); color: var(--muted); }
+
+    .pos-text { color: #69db8f; }
+    .neg-text { color: #f58579; }
+    .neu-text { color: var(--muted); }
+
+    .vol-bar-wrap {
+      height: 4px; background: var(--border); border-radius: 2px; margin-top: 6px;
+    }
+    .vol-bar { height: 4px; background: var(--accent); border-radius: 2px; }
+
+    .news-grid {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      margin-top: 20px;
+    }
+    .news-card {
+      display: flex;
+      gap: 12px;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px 14px;
+      text-decoration: none;
+      color: var(--text);
+      transition: border-color 0.15s, background 0.15s;
+    }
+    .news-card:hover { border-color: var(--accent); background: #1f2937; }
+    .news-thumb {
+      width: 60px; height: 60px;
+      object-fit: cover; border-radius: 6px;
+      flex-shrink: 0; background: var(--border);
+    }
+    .news-body { flex: 1; min-width: 0; }
+    .news-title { font-size: 13px; font-weight: 600; line-height: 1.5;
+                   display: -webkit-box; -webkit-line-clamp: 2;
+                   -webkit-box-orient: vertical; overflow: hidden; }
+    .news-meta  { font-size: 11px; color: var(--muted); margin-top: 5px; }
+    .news-section-title {
+      font-size: 13px; font-weight: 600; color: var(--muted);
+      margin-bottom: 10px; padding-bottom: 8px;
+      border-bottom: 1px solid var(--border);
+    }
+  </style>
+</head>
+<body>
+
+<!-- ── 헤더 -->
+<header>
+  <h1>📊 섹터 순환매 모니터</h1>
+  <p>섹터 상대강도 &amp; 모멘텀 실시간 추적 &nbsp;|&nbsp; 반도체 → 메모리 → 광통신 → 전력 → 소프트웨어</p>
+</header>
+
+<!-- ── 컨트롤 -->
+<div id="controls">
+  <div class="ctrl-group">
+    <label>상대성과 기간</label>
+    <div class="period-btns">
+      <button class="period-btn" data-days="21">1M</button>
+      <button class="period-btn active" data-days="63">3M</button>
+      <button class="period-btn" data-days="126">6M</button>
+      <button class="period-btn" data-days="252">1Y</button>
+    </div>
+  </div>
+  <button id="refresh-btn">🔄 새로고침</button>
+  <span id="last-update"></span>
+</div>
+
+<!-- ── 탭 -->
+<div id="tabs">
+  <button class="tab-btn active" data-tab="heatmap">🌡️ 히트맵</button>
+  <button class="tab-btn"        data-tab="rrg">🔄 RRG</button>
+  <button class="tab-btn"        data-tab="relative">📈 상대성과</button>
+  <button class="tab-btn"        data-tab="ranking">🏆 모멘텀 순위</button>
+  <button class="tab-btn"        data-tab="nasdaq">📡 나스닥 현황</button>
+</div>
+
+<!-- ── 콘텐츠 -->
+<div id="content">
+  <!-- 로더 -->
+  <div id="loader">
+    <div class="spinner"></div>
+    <span>Yahoo Finance 데이터 수신 중...</span>
+  </div>
+
+  <!-- 히트맵 탭 -->
+  <div class="tab-pane" id="pane-heatmap">
+    <div id="chart-heatmap"></div>
+    <div class="tip">
+      💡 <b>히트맵 읽는 법</b> — 행(섹터) 기준으로 가로로 읽으면 최근 가속/감속 확인.
+      열(기간) 기준으로 세로로 읽으면 어느 섹터가 전 기간 꾸준히 강한지 보임.
+      SPY(벤치마크)보다 진한 초록 = 아웃퍼폼.
+    </div>
+  </div>
+
+  <!-- RRG 탭 -->
+  <div class="tab-pane" id="pane-rrg">
+    <div id="chart-rrg"></div>
+    <div class="tip">
+      💡 <b>RRG 읽는 법</b> — 시계방향 순환:
+      <b style="color:#69db8f">Leading</b> → <b style="color:#79c8f8">Weakening</b> →
+      <b style="color:#f58579">Lagging</b> → <b style="color:#ffc270">Improving</b> → Leading<br>
+      ✅ 매수 타이밍: <b>Improving 진입</b> 또는 <b>Leading 내 상향 모멘텀</b> 섹터 &nbsp;|&nbsp;
+      ⚠️ 비중 축소: Weakening 진입 초기
+    </div>
+  </div>
+
+  <!-- 상대성과 탭 -->
+  <div class="tab-pane" id="pane-relative">
+    <div id="chart-relative"></div>
+    <div class="tip">
+      💡 <b>0선 위</b> = SPY 대비 초과수익. 기울기가 가장 가파르게 올라오는 섹터가 현재 돈이 들어오는 섹터.
+      기간 버튼으로 단기(1M) ↔ 장기(1Y) 비교 가능.
+    </div>
+  </div>
+
+  <!-- 모멘텀 순위 탭 -->
+  <div class="tab-pane" id="pane-ranking">
+    <p style="font-size:12px;color:var(--muted);margin-bottom:12px;">
+      모멘텀점수 = 1W×35% + 1M×30% + 3M×20% + 6M×10% + 1Y×5% &nbsp;(가중 평균 수익률, %)
+    </p>
+    <div id="ranking-table-wrap"></div>
+    <div class="tip">
+      💡 <b>매주 스크린샷</b>으로 순위 변화를 누적하면 섹터 로테이션 흐름을 추적할 수 있습니다.
+      3주 연속 순위가 상승하는 섹터에 집중.
+    </div>
+  </div>
+
+  <!-- 나스닥 현황 탭 -->
+  <div class="tab-pane" id="pane-nasdaq">
+    <div class="market-banner" id="market-banner">
+      <span class="status-badge status-closed" id="market-status-badge">● LOADING</span>
+      <span id="market-et-time" style="font-size:12px;color:var(--muted);"></span>
+      <span id="market-countdown" class="countdown"></span>
+    </div>
+    <div class="quote-cards" id="quote-cards"></div>
+    <div id="chart-intraday"></div>
+    <div class="news-grid" id="news-grid"></div>
+    <div class="tip">
+      💡 <b>나스닥 현황</b>은 60초마다 자동 갱신됩니다 (Yahoo Finance 15분 지연).
+      VIX 20↑ = 시장 불안 구간, 30↑ = 공포 구간.
+      장전(Pre) 큰 갭 = 당일 변동성 주의.
+    </div>
+  </div>
+</div>
+
+<script>
+// ════════════════════════════════════════════════════
+// ① 설정  ← index.html과 api/prices.js의 TICKERS를 동일하게 유지
+// ════════════════════════════════════════════════════
+const BENCHMARK = "SPY";
+
+const SECTORS = {
+  "반도체":     { ticker: "SOXX", color: "#42A5F5", order: 1 },
+  "메모리":     { ticker: "MU",   color: "#EF5350", order: 2 },
+  "광통신":     { ticker: "LITE", color: "#66BB6A", order: 3 },
+  "전력/유틸":  { ticker: "XLU",  color: "#FFA726", order: 4 },
+  "소프트웨어": { ticker: "IGV",  color: "#AB47BC", order: 5 },
+  "방산":       { ticker: "ITA",  color: "#A1887F", order: 6 },
+  "에너지":     { ticker: "XLE",  color: "#FFCA28", order: 7 },
+  "헬스케어":   { ticker: "XLV",  color: "#EC407A", order: 8 },
+  "금융":       { ticker: "XLF",  color: "#78909C", order: 9 },
+  "산업재":     { ticker: "XLI",  color: "#26C6DA", order: 10 },
+};
+
+const PERF_PERIODS = [
+  { label: "1W", days: 5  },
+  { label: "1M", days: 21 },
+  { label: "3M", days: 63 },
+  { label: "6M", days: 126 },
+  { label: "1Y", days: 252 },
+];
+
+const MOM_W = { "1W": 0.35, "1M": 0.30, "3M": 0.20, "6M": 0.10, "1Y": 0.05 };
+
+const PLOTLY_DARK = {
+  paper_bgcolor: "#0d1117",
+  plot_bgcolor:  "#161b22",
+  font:          { color: "#e6edf3", family: "Segoe UI, Malgun Gothic, sans-serif" },
+  gridcolor:     "rgba(255,255,255,0.07)",
+};
+
+// ════════════════════════════════════════════════════
+// ② 상태
+// ════════════════════════════════════════════════════
+let state = {
+  dates:    [],   // 공통 날짜 배열 (정렬됨)
+  prices:   {},   // { ticker: [price, ...] } (dates와 인덱스 대응)
+  periodDays: 63,
+  activeTab:  "heatmap",
+};
+
+// ════════════════════════════════════════════════════
+// ③ 데이터 유틸
+// ════════════════════════════════════════════════════
+async function fetchData() {
+  showLoader(true);
+  try {
+    const res  = await fetch("/api/prices");
+    if (!res.ok) throw new Error(`API 오류: ${res.status}`);
+    const json = await res.json();
+
+    // 벤치마크 날짜 기준으로 정렬
+    const allDates = Object.keys(json.prices[BENCHMARK] || {}).sort();
+    const aligned  = {};
+    for (const [ticker, priceMap] of Object.entries(json.prices)) {
+      aligned[ticker] = allDates.map(d => priceMap[d] ?? null);
+    }
+    state.dates  = allDates;
+    state.prices = aligned;
+
+    document.getElementById("last-update").textContent =
+      "최종 갱신: " + new Date(json.timestamp).toLocaleString("ko-KR");
+  } catch (err) {
+    alert("데이터 로드 실패: " + err.message);
+  } finally {
+    showLoader(false);
+  }
+}
+
+function showLoader(show) {
+  document.getElementById("loader").style.display = show ? "flex" : "none";
+  document.getElementById("refresh-btn").disabled = show;
+}
+
+/** 배열에서 마지막 n번째 이전 → 마지막 수익률 (null 제외) */
+function calcReturn(arr, n) {
+  const valid = arr.filter(v => v !== null);
+  if (valid.length <= n) return null;
+  return (valid[valid.length - 1] / valid[valid.length - 1 - n] - 1) * 100;
+}
+
+/** Exponential Moving Average */
+function ema(arr, span) {
+  const k = 2 / (span + 1);
+  const out = [];
+  let prev = null;
+  for (const v of arr) {
+    if (v === null) { out.push(prev); continue; }
+    prev = prev === null ? v : v * k + prev * (1 - k);
+    out.push(prev);
+  }
+  return out;
+}
+
+/** 공통 날짜 배열에서 마지막 n개 날짜만 */
+function lastNDates(n) {
+  return state.dates.slice(-n);
+}
+
+// ════════════════════════════════════════════════════
+// ④ 지표 계산
+// ════════════════════════════════════════════════════
+function calcAllPerf() {
+  return Object.entries(SECTORS).map(([name, cfg]) => {
+    const arr  = state.prices[cfg.ticker] || [];
+    const row  = { name, ticker: cfg.ticker, color: cfg.color, order: cfg.order };
+    for (const { label, days } of PERF_PERIODS) {
+      row[label] = calcReturn(arr, days);
+    }
+    row.momScore = Object.entries(MOM_W).reduce(
+      (s, [l, w]) => s + (row[l] != null ? row[l] * w : 0), 0
+    );
+    return row;
+  });
+}
+
+function calcRRG() {
+  const bench = state.prices[BENCHMARK] || [];
+  const points = [];
+
+  for (const [name, cfg] of Object.entries(SECTORS)) {
+    const sec = state.prices[cfg.ticker] || [];
+    const len = Math.min(bench.length, sec.length);
+    if (len < 60) continue;
+
+    // RS 시리즈
+    const rs = Array.from({ length: len }, (_, i) =>
+      (bench[i] && sec[i]) ? sec[i] / bench[i] : null
+    );
+
+    const rsRatio = ema(rs, 55);   // 장기 EMA
+    const rsMom   = ema(rsRatio.map(v => v ?? 0), 20); // 단기 EMA
+
+    // 트레일: 마지막 8포인트 (약 2주치)
+    const trailRatio = rsRatio.slice(-8);
+    const trailMom   = rsMom.slice(-8);
+
+    points.push({
+      name,
+      color:      cfg.color,
+      order:      cfg.order,
+      ratioRaw:   rsRatio[rsRatio.length - 1] ?? 0,
+      momRaw:     rsMom[rsMom.length - 1]     ?? 0,
+      trailRatio,
+      trailMom,
+    });
+  }
+
+  // 100 중심 정규화
+  const ratios = points.map(p => p.ratioRaw);
+  const moms   = points.map(p => p.momRaw);
+  const rMu = mean(ratios), rSd = std(ratios) || 1;
+  const mMu = mean(moms),   mSd = std(moms)   || 1;
+
+  for (const p of points) {
+    p.x = (p.ratioRaw - rMu) / rSd * 10 + 100;
+    p.y = (p.momRaw   - mMu) / mSd * 10 + 100;
+    p.trailX = p.trailRatio.map(v => ((v ?? p.ratioRaw) - rMu) / rSd * 10 + 100);
+    p.trailY = p.trailMom.map(v => ((v ?? p.momRaw) - mMu) / mSd * 10 + 100);
+    p.quadrant = quadLabel(p.x, p.y);
+  }
+  return points;
+}
+
+function quadLabel(x, y) {
+  if (x >= 100 && y >= 100) return "📈 Leading";
+  if (x <  100 && y >= 100) return "🔼 Improving";
+  if (x <  100 && y <  100) return "📉 Lagging";
+  return "🔽 Weakening";
+}
+
+function mean(arr) { return arr.reduce((a, b) => a + b, 0) / arr.length; }
+function std(arr)  {
+  const m = mean(arr);
+  return Math.sqrt(arr.reduce((a, b) => a + (b - m) ** 2, 0) / arr.length);
+}
+
+// ════════════════════════════════════════════════════
+// ⑤ 차트 렌더링
+// ════════════════════════════════════════════════════
+
+/* ── 히트맵 */
+function renderHeatmap() {
+  const perf  = calcAllPerf().sort((a, b) => a.order - b.order);
+  const bench = state.prices[BENCHMARK] || [];
+  const labels = PERF_PERIODS.map(p => p.label);
+
+  // 벤치마크 행
+  const benchRow = PERF_PERIODS.map(({ days }) => calcReturn(bench, days));
+
+  const yNames = [...perf.map(p => p.name), "📊 SPY"];
+  const z = [
+    ...perf.map(p => PERF_PERIODS.map(({ label }) => p[label])),
+    benchRow,
+  ];
+  const textArr = z.map(row =>
+    row.map(v => v != null ? (v >= 0 ? "+" : "") + v.toFixed(1) + "%" : "N/A")
+  );
+
+  const fig = [{
+    type: "heatmap",
+    z, x: labels, y: yNames,
+    text: textArr,
+    texttemplate: "%{text}",
+    textfont: { size: 13 },
+    zmid: 0,
+    colorscale: [
+      [0,    "#7B1FA2"], [0.15, "#C62828"],
+      [0.35, "#E57373"], [0.48, "#FFCDD2"],
+      [0.5,  "#F5F5F5"],
+      [0.52, "#C8E6C9"], [0.65, "#43A047"],
+      [0.85, "#1B5E20"], [1,   "#00600f"],
+    ],
+    colorbar: {
+      title: { text: "수익률(%)", font: { color: "#8b949e" } },
+      ticksuffix: "%", tickfont: { color: "#8b949e" },
+    },
+    hovertemplate: "%{y}  ·  %{x}<br>수익률: %{text}<extra></extra>",
+  }];
+
+  const layout = {
+    ...PLOTLY_DARK,
+    title: { text: "섹터별 기간 수익률 히트맵", font: { size: 15 } },
+    height: 460,
+    margin: { l: 120, r: 80, t: 55, b: 40 },
+    xaxis: { side: "top", tickfont: { size: 12 } },
+    yaxis: { tickfont: { size: 12 } },
+  };
+
+  Plotly.newPlot("chart-heatmap", fig, layout, { displayModeBar: false, responsive: true });
+}
+
+/* ── RRG */
+function renderRRG() {
+  const points = calcRRG();
+  const R = [84, 116];
+  const traces = [];
+
+  // 사분면 그림자 (shape 대신 scatter 사용)
+  const quads = [
+    { x0:100, x1:116, y0:100, y1:116, color:"rgba(76,175,80,0.07)"  },
+    { x0: 84, x1:100, y0:100, y1:116, color:"rgba(255,152,0,0.07)"  },
+    { x0: 84, x1:100, y0: 84, y1:100, color:"rgba(244,67,54,0.07)"  },
+    { x0:100, x1:116, y0: 84, y1:100, color:"rgba(33,150,243,0.07)" },
+  ];
+
+  for (const p of points.sort((a, b) => a.order - b.order)) {
+    // 트레일
+    if (p.trailX.length > 1) {
+      traces.push({
+        type: "scatter", mode: "lines",
+        x: p.trailX, y: p.trailY,
+        line: { color: p.color, width: 1.5, dash: "dot" },
+        opacity: 0.4, showlegend: false, hoverinfo: "skip",
+      });
+    }
+    // 포인트
+    traces.push({
+      type: "scatter", mode: "markers+text",
+      x: [p.x], y: [p.y],
+      marker: { size: 16, color: p.color, line: { color: "#fff", width: 2 } },
+      text: [`<b>${p.name}</b>`],
+      textposition: "top center",
+      textfont: { size: 10 },
+      name: p.name,
+      customdata: [[p.ticker, p.quadrant]],
+      hovertemplate:
+        "<b>%{text}</b> (%{customdata[0]})<br>" +
+        "상태: %{customdata[1]}<br>" +
+        "RS-Ratio: %{x:.1f} | RS-Mom: %{y:.1f}<extra></extra>",
+    });
+  }
+
+  const shapes = quads.map(q => ({
+    type: "rect",
+    x0: q.x0, x1: q.x1, y0: q.y0, y1: q.y1,
+    fillcolor: q.color, line: { width: 0 },
+  }));
+
+  const annotations = [
+    { x: 112, y: 114, text: "<b>📈 Leading</b>",   font: { color: "rgba(76,175,80,0.9)",  size: 11 }, showarrow: false },
+    { x:  88, y: 114, text: "<b>🔼 Improving</b>", font: { color: "rgba(255,152,0,0.9)",  size: 11 }, showarrow: false },
+    { x:  88, y:  86, text: "<b>📉 Lagging</b>",   font: { color: "rgba(244,67,54,0.9)",  size: 11 }, showarrow: false },
+    { x: 112, y:  86, text: "<b>🔽 Weakening</b>", font: { color: "rgba(33,150,243,0.9)", size: 11 }, showarrow: false },
+  ];
+
+  const layout = {
+    ...PLOTLY_DARK,
+    title: { text: "Relative Rotation Graph (RRG)", font: { size: 15 } },
+    xaxis: {
+      title: "RS-Ratio → (상대강도 높을수록 우측)",
+      range: R, gridcolor: "rgba(255,255,255,0.08)", zeroline: false,
+    },
+    yaxis: {
+      title: "RS-Momentum → (모멘텀 강할수록 위)",
+      range: R, gridcolor: "rgba(255,255,255,0.08)", zeroline: false,
+    },
+    shapes, annotations,
+    showlegend: false,
+    height: 570,
+    margin: { l: 80, r: 30, t: 60, b: 70 },
+  };
+
+  Plotly.newPlot("chart-rrg", traces, layout, { displayModeBar: false, responsive: true });
+}
+
+/* ── 상대성과 */
+function renderRelativePerf() {
+  const n = state.periodDays;
+  const dates = lastNDates(n);
+  if (!dates.length) return;
+
+  const startIdx = state.dates.length - n;
+  const bench = (state.prices[BENCHMARK] || []).slice(startIdx);
+  const benchBase = bench.find(v => v !== null) || 1;
+  const benchNorm = bench.map(v => v != null ? v / benchBase : null);
+
+  const traces = [];
+
+  // 0선
+  traces.push({
+    type: "scatter", mode: "lines",
+    x: dates, y: new Array(n).fill(0),
+    name: "SPY(기준)", line: { color: "rgba(255,255,255,0.2)", width: 1, dash: "dot" },
+    hoverinfo: "skip",
+  });
+
+  for (const [name, cfg] of Object.entries(SECTORS)) {
+    const arr  = (state.prices[cfg.ticker] || []).slice(startIdx);
+    const base = arr.find(v => v !== null) || 1;
+    const rel  = arr.map((v, i) => {
+      if (v === null || benchNorm[i] === null) return null;
+      return ((v / base) / benchNorm[i] - 1) * 100;
+    });
+    traces.push({
+      type: "scatter", mode: "lines",
+      x: dates, y: rel, name,
+      line: { color: cfg.color, width: 2 },
+      hovertemplate: `<b>${name}</b><br>%{x}<br>초과수익: %{y:.2f}%<extra></extra>`,
+      connectgaps: false,
+    });
+  }
+
+  const layout = {
+    ...PLOTLY_DARK,
+    title: { text: `SPY 대비 상대 수익률 (최근 ${n}일)`, font: { size: 15 } },
+    xaxis: { gridcolor: "rgba(255,255,255,0.07)" },
+    yaxis: { ticksuffix: "%", gridcolor: "rgba(255,255,255,0.07)", zeroline: false },
+    hovermode: "x unified",
+    height: 510,
+    margin: { l: 65, r: 20, t: 60, b: 55 },
+    legend: { bgcolor: "rgba(0,0,0,0.5)", bordercolor: "#30363d", borderwidth: 1 },
+  };
+
+  Plotly.newPlot("chart-relative", traces, layout, { displayModeBar: true, responsive: true });
+}
+
+/* ── 모멘텀 순위 테이블 */
+function renderRanking() {
+  const perf = calcAllPerf().sort((a, b) => b.momScore - a.momScore);
+  const cols  = PERF_PERIODS.map(p => p.label);
+
+  const fmt = (v, unit = "%") =>
+    v != null ? `<span class="${v >= 0 ? "pos" : "neg"}">${v >= 0 ? "+" : ""}${v.toFixed(1)}${unit}</span>` : "–";
+
+  const headerRow = ["순위", "섹터", "티커", ...cols, "vs SPY(3M)", "모멘텀점수"]
+    .map(h => `<th>${h}</th>`).join("");
+
+  const bodyRows = perf.map((p, i) => {
+    // vs SPY 3M
+    const benchArr = state.prices[BENCHMARK] || [];
+    const secArr   = state.prices[p.ticker]  || [];
+    const benchRet = calcReturn(benchArr, 63);
+    const secRet   = calcReturn(secArr,   63);
+    const vsSpy    = secRet != null && benchRet != null ? secRet - benchRet : null;
+
+    return `<tr>
+      <td>${i + 1}</td>
+      <td class="name-cell">${p.name}</td>
+      <td style="color:var(--muted);font-size:11px">${p.ticker}</td>
+      ${cols.map(l => `<td>${fmt(p[l])}</td>`).join("")}
+      <td>${fmt(vsSpy)}</td>
+      <td><b>${fmt(p.momScore, "")}</b></td>
+    </tr>`;
+  }).join("");
+
+  document.getElementById("ranking-table-wrap").innerHTML = `
+    <table>
+      <thead><tr>${headerRow}</tr></thead>
+      <tbody>${bodyRows}</tbody>
+    </table>`;
+}
+
+// ════════════════════════════════════════════════════
+// ⑥ 탭 전환
+// ════════════════════════════════════════════════════
+function switchTab(tab) {
+  state.activeTab = tab;
+  document.querySelectorAll(".tab-btn").forEach(b =>
+    b.classList.toggle("active", b.dataset.tab === tab));
+  document.querySelectorAll(".tab-pane").forEach(p =>
+    p.classList.toggle("active", p.id === `pane-${tab}`));
+
+  if (tab === "nasdaq") {
+    startNasdaqRefresh();
+  } else {
+    stopNasdaqRefresh();
+  }
+  renderActiveTab();
+}
+
+function renderActiveTab() {
+  const t = state.activeTab;
+  if (t === "nasdaq") { renderNasdaq(); return; }
+  if (!state.dates.length) return;
+  if (t === "heatmap")  renderHeatmap();
+  if (t === "rrg")      renderRRG();
+  if (t === "relative") renderRelativePerf();
+  if (t === "ranking")  renderRanking();
+}
+
+// ════════════════════════════════════════════════════
+// ⑦ 이벤트 바인딩 & 초기화
+// ════════════════════════════════════════════════════
+document.querySelectorAll(".tab-btn").forEach(btn =>
+  btn.addEventListener("click", () => switchTab(btn.dataset.tab)));
+
+document.querySelectorAll(".period-btn").forEach(btn => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll(".period-btn").forEach(b => b.classList.remove("active"));
+    btn.classList.add("active");
+    state.periodDays = parseInt(btn.dataset.days);
+    if (state.activeTab === "relative") renderRelativePerf();
+  });
+});
+
+document.getElementById("refresh-btn").addEventListener("click", async () => {
+  await fetchData();
+  renderActiveTab();
+});
+
+
+// ════════════════════════════════════════════════════
+// ⑧  나스닥 현황 — 실시간 데이터
+// ════════════════════════════════════════════════════
+
+let nasState = {
+  data:      null,
+  timer:     null,   // 60초 자동 갱신 인터벌
+  countdown: 60,
+  cdTimer:   null,
+};
+
+/** ET 현지 시각 기준 장 상태 계산 */
+function getMarketStatus() {
+  const etStr = new Date().toLocaleString("en-US", { timeZone: "America/New_York" });
+  const et    = new Date(etStr);
+  const day   = et.getDay();                       // 0=일,6=토
+  const t     = et.getHours() * 60 + et.getMinutes();
+
+  if (day === 0 || day === 6)       return "closed";
+  if (t >= 240  && t < 570)        return "premarket";   // 04:00~09:30
+  if (t >= 570  && t < 960)        return "open";        // 09:30~16:00
+  if (t >= 960  && t < 1200)       return "afterhours";  // 16:00~20:00
+  return "closed";
+}
+
+function fmtET() {
+  return new Date().toLocaleString("en-US", {
+    timeZone: "America/New_York",
+    hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false,
+  }) + " ET";
+}
+
+async function fetchNasdaq() {
+  try {
+    const res  = await fetch("/api/nasdaq");
+    if (!res.ok) throw new Error("API " + res.status);
+    nasState.data = await res.json();
+  } catch (err) {
+    console.error("[nasdaq]", err.message);
+  }
+}
+
+function startNasdaqRefresh() {
+  stopNasdaqRefresh();
+  nasState.countdown = 60;
+
+  // 카운트다운 표시 (매초)
+  nasState.cdTimer = setInterval(() => {
+    nasState.countdown--;
+    const el = document.getElementById("market-countdown");
+    if (el) el.textContent = `⟳ ${nasState.countdown}초 후 자동 갱신`;
+    const etEl = document.getElementById("market-et-time");
+    if (etEl) etEl.textContent = fmtET();
+    if (nasState.countdown <= 0) {
+      nasState.countdown = 60;
+      fetchNasdaq().then(renderNasdaq);
+    }
+  }, 1000);
+}
+
+function stopNasdaqRefresh() {
+  clearInterval(nasState.timer);
+  clearInterval(nasState.cdTimer);
+}
+
+/* ── 숫자 포맷 헬퍼 */
+function fmtNum(v, decimals = 2) {
+  if (v == null) return "–";
+  return Number(v).toLocaleString("en-US", {
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  });
+}
+function fmtPct(v) {
+  if (v == null) return "–";
+  const sign = v >= 0 ? "+" : "";
+  return `${sign}${v.toFixed(2)}%`;
+}
+function fmtVol(v) {
+  if (!v) return "–";
+  if (v >= 1e9) return (v / 1e9).toFixed(2) + "B";
+  if (v >= 1e6) return (v / 1e6).toFixed(1) + "M";
+  return (v / 1e3).toFixed(0) + "K";
+}
+function timeAgo(isoStr) {
+  if (!isoStr) return "";
+  const diff = (Date.now() - new Date(isoStr).getTime()) / 1000;
+  if (diff < 60)   return Math.round(diff) + "초 전";
+  if (diff < 3600) return Math.round(diff / 60) + "분 전";
+  if (diff < 86400)return Math.round(diff / 3600) + "시간 전";
+  return Math.round(diff / 86400) + "일 전";
+}
+function colorClass(v) {
+  if (v == null) return "neu-text";
+  return v >= 0 ? "pos-text" : "neg-text";
+}
+
+/* ── 마켓 상태 배너 */
+function renderMarketBanner() {
+  const status = getMarketStatus();
+  const badge  = document.getElementById("market-status-badge");
+  const cdEl   = document.getElementById("market-countdown");
+  const etEl   = document.getElementById("market-et-time");
+  if (!badge) return;
+
+  const cfg = {
+    open:       { cls: "status-open",       label: "● MARKET OPEN",   dot: true  },
+    premarket:  { cls: "status-premarket",  label: "● PRE-MARKET",    dot: true  },
+    afterhours: { cls: "status-afterhours", label: "● AFTER HOURS",   dot: false },
+    closed:     { cls: "status-closed",     label: "● MARKET CLOSED", dot: false },
+  }[status];
+
+  badge.className = "status-badge " + cfg.cls;
+  badge.innerHTML = (cfg.dot ? '<span class="live-dot"></span>' : "") + cfg.label;
+  if (etEl) etEl.textContent = fmtET();
+  if (cdEl) cdEl.textContent = `⟳ ${nasState.countdown}초 후 자동 갱신`;
+}
+
+/* ── 시세 카드 */
+function renderQuoteCards() {
+  const el = document.getElementById("quote-cards");
+  if (!el || !nasState.data) return;
+  const { quotes } = nasState.data;
+
+  const CARD_CFG = [
+    { sym: "QQQ",   label: "QQQ",              unit: "$" },
+    { sym: "^IXIC", label: "나스닥 종합",       unit: ""  },
+    { sym: "^GSPC", label: "S&P 500",           unit: ""  },
+    { sym: "^VIX",  label: "VIX (공포지수)",    unit: ""  },
+  ];
+
+  el.innerHTML = CARD_CFG.map(({ sym, label, unit }) => {
+    const q = quotes[sym];
+    if (!q) return "";
+
+    const priceFmt = unit + fmtNum(q.price, sym === "^VIX" ? 2 : 2);
+    const chgCls   = colorClass(q.changePct);
+    const chgTxt   = `${fmtPct(q.changePct)}  (${unit}${fmtNum(q.change, 2)})`;
+
+    // 거래량 바 (QQQ만)
+    const volBar = (sym === "QQQ" && q.avgVolume)
+      ? (() => {
+          const ratio = Math.min((q.volume / q.avgVolume), 2);
+          const pct   = Math.round(ratio * 50);
+          const barColor = ratio > 1.2 ? "#3fb950" : ratio < 0.8 ? "#f85149" : "#1f6feb";
+          return `<div class="qc-sub">거래량: ${fmtVol(q.volume)} (평균 대비 ${(ratio * 100).toFixed(0)}%)</div>
+                  <div class="vol-bar-wrap"><div class="vol-bar" style="width:${pct}%;background:${barColor}"></div></div>`;
+        })()
+      : "";
+
+    // VIX 해석
+    const vixNote = sym === "^VIX"
+      ? `<div class="qc-sub">${q.price >= 30 ? "😱 공포 구간" : q.price >= 20 ? "⚠️ 불안 구간" : "😌 안정 구간"}</div>`
+      : "";
+
+    // 장전/장후 표시
+    const ext = q.preMarketPrice
+      ? `<div class="qc-ext">장전: ${unit}${fmtNum(q.preMarketPrice)} <span class="${colorClass(q.preMarketChangePct)}">${fmtPct(q.preMarketChangePct)}</span></div>`
+      : q.postMarketPrice
+      ? `<div class="qc-ext">장후: ${unit}${fmtNum(q.postMarketPrice)} <span class="${colorClass(q.postMarketChangePct)}">${fmtPct(q.postMarketChangePct)}</span></div>`
+      : "";
+
+    return `<div class="quote-card">
+      <div class="qc-label">${label}</div>
+      <div class="qc-price">${priceFmt}</div>
+      <div class="qc-change ${chgCls}">${chgTxt}</div>
+      <div class="qc-sub">고: ${unit}${fmtNum(q.dayHigh)} &nbsp; 저: ${unit}${fmtNum(q.dayLow)}</div>
+      ${volBar}${vixNote}${ext}
+    </div>`;
+  }).join("");
+}
+
+/* ── 당일 QQQ 장중 차트 */
+function renderIntradayChart() {
+  const el = document.getElementById("chart-intraday");
+  if (!el || !nasState.data) return;
+  const bars = nasState.data.intraday;
+
+  if (!bars || bars.length < 2) {
+    el.innerHTML = `<div style="text-align:center;padding:40px;color:var(--muted);font-size:13px;">
+      📭 장중 데이터 없음 (장외 시간 또는 주말)
+    </div>`;
+    return;
+  }
+
+  const times  = bars.map(b => b.time);
+  const closes = bars.map(b => b.close);
+  const vols   = bars.map(b => b.volume);
+  const open   = closes[0];
+  const isUp   = closes[closes.length - 1] >= open;
+  const lineColor = isUp ? "#3fb950" : "#f85149";
+  const fillColor = isUp ? "rgba(63,185,80,0.1)" : "rgba(248,81,73,0.1)";
+
+  const priceTrace = {
+    type: "scatter", mode: "lines",
+    x: times, y: closes,
+    name: "QQQ",
+    line: { color: lineColor, width: 2 },
+    fill: "tozeroy", fillcolor: fillColor,
+    hovertemplate: "%{x|%H:%M}  $%{y:.2f}<extra></extra>",
+    yaxis: "y",
+  };
+
+  const volTrace = {
+    type: "bar",
+    x: times, y: vols,
+    name: "거래량",
+    marker: { color: "rgba(31,111,235,0.3)" },
+    hovertemplate: "%{x|%H:%M}  %{y:,}<extra></extra>",
+    yaxis: "y2",
+  };
+
+  // 전일 종가 기준선
+  const prevClose = nasState.data.quotes?.["QQQ"]?.previousClose;
+  const shapes = prevClose ? [{
+    type: "line",
+    x0: times[0], x1: times[times.length - 1],
+    y0: prevClose, y1: prevClose,
+    yref: "y",
+    line: { color: "rgba(255,255,255,0.2)", width: 1, dash: "dot" },
+  }] : [];
+
+  const layout = {
+    ...PLOTLY_DARK,
+    title: { text: "QQQ 장중 흐름 (5분봉)", font: { size: 14 } },
+    xaxis: { gridcolor: "rgba(255,255,255,0.06)", type: "date",
+             tickformat: "%H:%M" },
+    yaxis: { gridcolor: "rgba(255,255,255,0.06)", tickprefix: "$",
+             domain: [0.25, 1] },
+    yaxis2: { gridcolor: "rgba(0,0,0,0)", zeroline: false,
+              domain: [0, 0.2], showticklabels: false },
+    shapes,
+    height: 380,
+    margin: { l: 60, r: 20, t: 50, b: 40 },
+    showlegend: false,
+    hovermode: "x unified",
+  };
+
+  Plotly.newPlot("chart-intraday", [priceTrace, volTrace], layout,
+    { displayModeBar: false, responsive: true });
+}
+
+/* ── 뉴스 피드 */
+function renderNewsFeed() {
+  const el = document.getElementById("news-grid");
+  if (!el || !nasState.data) return;
+  const news = nasState.data.news || [];
+
+  if (!news.length) {
+    el.innerHTML = `<div style="color:var(--muted);font-size:13px;padding:20px 0;">뉴스를 가져오지 못했습니다.</div>`;
+    return;
+  }
+
+  el.innerHTML = `<div class="news-section-title">📰 최신 나스닥 뉴스</div>` +
+    news.map(n => `
+      <a class="news-card" href="${n.link}" target="_blank" rel="noopener">
+        ${n.thumbnail ? `<img class="news-thumb" src="${n.thumbnail}" alt="" loading="lazy" onerror="this.style.display='none'">` : ""}
+        <div class="news-body">
+          <div class="news-title">${n.title}</div>
+          <div class="news-meta">${n.publisher ?? ""} · ${timeAgo(n.time)}</div>
+        </div>
+      </a>`).join("");
+}
+
+/* ── 나스닥 탭 전체 렌더 */
+async function renderNasdaq() {
+  if (!nasState.data) await fetchNasdaq();
+  renderMarketBanner();
+  renderQuoteCards();
+  renderIntradayChart();
+  renderNewsFeed();
+}
+
+// 최초 로드
+(async () => {
+  document.getElementById("pane-heatmap").classList.add("active");
+  await fetchData();
+  renderActiveTab();
+})();
+</script>
+</body>
+</html>

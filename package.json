@@ -1,0 +1,8 @@
+{
+  "name": "sector-rotation-monitor",
+  "version": "1.0.0",
+  "description": "섹터 순환매 모니터 - GitHub → Vercel 배포",
+  "dependencies": {
+    "yahoo-finance2": "^2.11.3"
+  }
+}
