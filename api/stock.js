@@ -1,169 +1,48 @@
 /**
- * api/stocks.js — 섹터별 대표주 + 낙수효과 수혜주 실시간 시세
- * Yahoo Finance v7 batch quote API 사용 (패키지 불필요)
+ * api/stocks.js — 섹터별 대표주 + 낙수효과 수혜주
+ * prices.js와 동일한 v8 chart API 사용 (검증된 방식)
  */
 
 const SECTOR_STOCKS = {
-  "반도체": {
-    etf: "SOXX",
-    leaders: [
-      { ticker: "NVDA", name: "NVIDIA" },
-      { ticker: "AMD",  name: "AMD" },
-      { ticker: "AVGO", name: "Broadcom" },
-      { ticker: "QCOM", name: "Qualcomm" },
-      { ticker: "INTC", name: "Intel" },
-    ],
-    trickle: [
-      { ticker: "AEHR", name: "Aehr Test" },
-      { ticker: "SITM", name: "SiTime" },
-      { ticker: "MCHP", name: "Microchip Tech" },
-      { ticker: "SWKS", name: "Skyworks" },
-      { ticker: "ACLS", name: "Axcelis Tech" },
-    ],
-  },
-  "메모리": {
-    etf: "MU",
-    leaders: [
-      { ticker: "MU",   name: "Micron" },
-      { ticker: "WDC",  name: "Western Digital" },
-      { ticker: "STX",  name: "Seagate" },
-    ],
-    trickle: [
-      { ticker: "SIMO", name: "Silicon Motion" },
-      { ticker: "CRUS", name: "Cirrus Logic" },
-      { ticker: "IMOS", name: "ChipMOS" },
-      { ticker: "NXPI", name: "NXP Semi" },
-      { ticker: "RMBS", name: "Rambus" },
-    ],
-  },
-  "광통신": {
-    etf: "LITE",
-    leaders: [
-      { ticker: "LITE", name: "Lumentum" },
-      { ticker: "COHR", name: "Coherent" },
-      { ticker: "AAOI", name: "Applied Optoelectronics" },
-      { ticker: "VIAV", name: "Viavi Solutions" },
-    ],
-    trickle: [
-      { ticker: "IIVI", name: "II-VI (Coherent)" },
-      { ticker: "NPTN", name: "NeoPhotonics" },
-      { ticker: "FNSR", name: "Finisar" },
-      { ticker: "OCLR", name: "Oclaro" },
-      { ticker: "LUMN", name: "Lumen Tech" },
-    ],
-  },
-  "전력/유틸": {
-    etf: "XLU",
-    leaders: [
-      { ticker: "NEE",  name: "NextEra Energy" },
-      { ticker: "SO",   name: "Southern Company" },
-      { ticker: "DUK",  name: "Duke Energy" },
-      { ticker: "AEP",  name: "American Electric" },
-    ],
-    trickle: [
-      { ticker: "NOVA", name: "Sunnova Energy" },
-      { ticker: "ARRY", name: "Array Technologies" },
-      { ticker: "ENPH", name: "Enphase Energy" },
-      { ticker: "RUN",  name: "Sunrun" },
-      { ticker: "BE",   name: "Bloom Energy" },
-    ],
-  },
-  "소프트웨어": {
-    etf: "IGV",
-    leaders: [
-      { ticker: "MSFT", name: "Microsoft" },
-      { ticker: "CRM",  name: "Salesforce" },
-      { ticker: "NOW",  name: "ServiceNow" },
-      { ticker: "ORCL", name: "Oracle" },
-    ],
-    trickle: [
-      { ticker: "TWLO", name: "Twilio" },
-      { ticker: "BAND", name: "Bandwidth" },
-      { ticker: "ZS",   name: "Zscaler" },
-      { ticker: "CRWD", name: "CrowdStrike" },
-      { ticker: "NET",  name: "Cloudflare" },
-    ],
-  },
-  "방산": {
-    etf: "ITA",
-    leaders: [
-      { ticker: "LMT",  name: "Lockheed Martin" },
-      { ticker: "RTX",  name: "RTX Corp" },
-      { ticker: "NOC",  name: "Northrop Grumman" },
-      { ticker: "GD",   name: "General Dynamics" },
-    ],
-    trickle: [
-      { ticker: "KTOS", name: "Kratos Defense" },
-      { ticker: "PLTR", name: "Palantir" },
-      { ticker: "AVAV", name: "AeroVironment" },
-      { ticker: "HII",  name: "Huntington Ingalls" },
-      { ticker: "RCAT", name: "Red Cat Holdings" },
-    ],
-  },
-  "에너지": {
-    etf: "XLE",
-    leaders: [
-      { ticker: "XOM",  name: "ExxonMobil" },
-      { ticker: "CVX",  name: "Chevron" },
-      { ticker: "COP",  name: "ConocoPhillips" },
-      { ticker: "SLB",  name: "SLB" },
-    ],
-    trickle: [
-      { ticker: "OXY",  name: "Occidental" },
-      { ticker: "MPC",  name: "Marathon Petroleum" },
-      { ticker: "DVN",  name: "Devon Energy" },
-      { ticker: "FANG", name: "Diamondback Energy" },
-      { ticker: "HAL",  name: "Halliburton" },
-    ],
-  },
-  "헬스케어": {
-    etf: "XLV",
-    leaders: [
-      { ticker: "LLY",  name: "Eli Lilly" },
-      { ticker: "UNH",  name: "UnitedHealth" },
-      { ticker: "ABBV", name: "AbbVie" },
-      { ticker: "MRK",  name: "Merck" },
-    ],
-    trickle: [
-      { ticker: "ISRG", name: "Intuitive Surgical" },
-      { ticker: "DXCM", name: "DexCom" },
-      { ticker: "VEEV", name: "Veeva Systems" },
-      { ticker: "HIMS", name: "Hims & Hers" },
-      { ticker: "ETON", name: "Eton Pharmaceuticals" },
-    ],
-  },
-  "금융": {
-    etf: "XLF",
-    leaders: [
-      { ticker: "JPM",  name: "JPMorgan" },
-      { ticker: "BAC",  name: "Bank of America" },
-      { ticker: "GS",   name: "Goldman Sachs" },
-      { ticker: "MS",   name: "Morgan Stanley" },
-    ],
-    trickle: [
-      { ticker: "COIN", name: "Coinbase" },
-      { ticker: "HOOD", name: "Robinhood" },
-      { ticker: "SOFI", name: "SoFi Technologies" },
-      { ticker: "NU",   name: "Nu Holdings" },
-      { ticker: "AFRM", name: "Affirm" },
-    ],
-  },
-  "산업재": {
-    etf: "XLI",
-    leaders: [
-      { ticker: "CAT",  name: "Caterpillar" },
-      { ticker: "DE",   name: "John Deere" },
-      { ticker: "HON",  name: "Honeywell" },
-      { ticker: "GE",   name: "GE Aerospace" },
-    ],
-    trickle: [
-      { ticker: "STRL", name: "Sterling Infrastructure" },
-      { ticker: "PWR",  name: "Quanta Services" },
-      { ticker: "FIX",  name: "Comfort Systems" },
-      { ticker: "GTES", name: "Gates Industrial" },
-      { ticker: "TT",   name: "Trane Technologies" },
-    ],
-  },
+  "반도체":     { etf: "SOXX",
+    leaders: [{ t:"NVDA",n:"NVIDIA" },{ t:"AMD",n:"AMD" },{ t:"AVGO",n:"Broadcom" },{ t:"QCOM",n:"Qualcomm" },{ t:"INTC",n:"Intel" }],
+    trickle: [{ t:"AEHR",n:"Aehr Test" },{ t:"SITM",n:"SiTime" },{ t:"MCHP",n:"Microchip" },{ t:"SWKS",n:"Skyworks" },{ t:"ACLS",n:"Axcelis" }] },
+
+  "메모리":     { etf: "MU",
+    leaders: [{ t:"MU",n:"Micron" },{ t:"WDC",n:"Western Digital" },{ t:"STX",n:"Seagate" }],
+    trickle: [{ t:"SIMO",n:"Silicon Motion" },{ t:"CRUS",n:"Cirrus Logic" },{ t:"RMBS",n:"Rambus" },{ t:"NXPI",n:"NXP Semi" }] },
+
+  "광통신":     { etf: "LITE",
+    leaders: [{ t:"LITE",n:"Lumentum" },{ t:"COHR",n:"Coherent" },{ t:"AAOI",n:"Applied Opto" },{ t:"VIAV",n:"Viavi" }],
+    trickle: [{ t:"OCLR",n:"Oclaro" },{ t:"LUMN",n:"Lumen Tech" },{ t:"CIEN",n:"Ciena" },{ t:"INFN",n:"Infinera" }] },
+
+  "전력/유틸":  { etf: "XLU",
+    leaders: [{ t:"NEE",n:"NextEra" },{ t:"SO",n:"Southern Co" },{ t:"DUK",n:"Duke Energy" },{ t:"AEP",n:"Am. Electric" }],
+    trickle: [{ t:"ENPH",n:"Enphase" },{ t:"ARRY",n:"Array Tech" },{ t:"RUN",n:"Sunrun" },{ t:"BE",n:"Bloom Energy" },{ t:"NOVA",n:"Sunnova" }] },
+
+  "소프트웨어": { etf: "IGV",
+    leaders: [{ t:"MSFT",n:"Microsoft" },{ t:"CRM",n:"Salesforce" },{ t:"NOW",n:"ServiceNow" },{ t:"ORCL",n:"Oracle" }],
+    trickle: [{ t:"TWLO",n:"Twilio" },{ t:"BAND",n:"Bandwidth" },{ t:"ZS",n:"Zscaler" },{ t:"CRWD",n:"CrowdStrike" },{ t:"NET",n:"Cloudflare" }] },
+
+  "방산":       { etf: "ITA",
+    leaders: [{ t:"LMT",n:"Lockheed" },{ t:"RTX",n:"RTX Corp" },{ t:"NOC",n:"Northrop" },{ t:"GD",n:"General Dynamics" }],
+    trickle: [{ t:"KTOS",n:"Kratos" },{ t:"PLTR",n:"Palantir" },{ t:"AVAV",n:"AeroVironment" },{ t:"HII",n:"Huntington Ingalls" }] },
+
+  "에너지":     { etf: "XLE",
+    leaders: [{ t:"XOM",n:"ExxonMobil" },{ t:"CVX",n:"Chevron" },{ t:"COP",n:"ConocoPhillips" },{ t:"SLB",n:"SLB" }],
+    trickle: [{ t:"OXY",n:"Occidental" },{ t:"MPC",n:"Marathon" },{ t:"DVN",n:"Devon Energy" },{ t:"HAL",n:"Halliburton" }] },
+
+  "헬스케어":   { etf: "XLV",
+    leaders: [{ t:"LLY",n:"Eli Lilly" },{ t:"UNH",n:"UnitedHealth" },{ t:"ABBV",n:"AbbVie" },{ t:"MRK",n:"Merck" }],
+    trickle: [{ t:"ISRG",n:"Intuitive Surgical" },{ t:"DXCM",n:"DexCom" },{ t:"HIMS",n:"Hims & Hers" },{ t:"ETON",n:"Eton Pharma" }] },
+
+  "금융":       { etf: "XLF",
+    leaders: [{ t:"JPM",n:"JPMorgan" },{ t:"BAC",n:"Bank of America" },{ t:"GS",n:"Goldman Sachs" },{ t:"MS",n:"Morgan Stanley" }],
+    trickle: [{ t:"COIN",n:"Coinbase" },{ t:"HOOD",n:"Robinhood" },{ t:"SOFI",n:"SoFi" },{ t:"NU",n:"Nu Holdings" }] },
+
+  "산업재":     { etf: "XLI",
+    leaders: [{ t:"CAT",n:"Caterpillar" },{ t:"DE",n:"John Deere" },{ t:"HON",n:"Honeywell" },{ t:"GE",n:"GE Aerospace" }],
+    trickle: [{ t:"STRL",n:"Sterling Infra" },{ t:"PWR",n:"Quanta Services" },{ t:"FIX",n:"Comfort Systems" },{ t:"TT",n:"Trane Tech" }] },
 };
 
 const HEADERS = {
@@ -171,79 +50,78 @@ const HEADERS = {
   "Accept": "application/json",
 };
 
-async function batchQuote(tickers) {
-  const symbols = tickers.join(",");
-  const fields  = "shortName,regularMarketPrice,regularMarketChangePercent,regularMarketChange,regularMarketVolume,marketCap";
-  const url = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${encodeURIComponent(symbols)}&fields=${fields}`;
-
+// v8 chart API로 단일 티커 현재가 조회 (prices.js와 동일한 방식)
+async function fetchQuote(ticker) {
+  const enc = encodeURIComponent(ticker);
+  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${enc}?interval=1d&range=5d`;
   const res  = await fetch(url, { headers: HEADERS });
-  if (!res.ok) throw new Error(`batch quote HTTP ${res.status}`);
+  if (!res.ok) throw new Error(`${ticker} HTTP ${res.status}`);
   const json = await res.json();
+  const meta = json?.chart?.result?.[0]?.meta;
+  if (!meta?.regularMarketPrice) throw new Error(`${ticker}: no price`);
 
-  const map = {};
-  for (const q of json?.quoteResponse?.result || []) {
-    map[q.symbol] = {
-      ticker:    q.symbol,
-      name:      q.shortName ?? q.symbol,
-      price:     q.regularMarketPrice     ?? null,
-      change:    q.regularMarketChange    ?? null,
-      changePct: q.regularMarketChangePercent ?? null,
-      volume:    q.regularMarketVolume    ?? null,
-      marketCap: q.marketCap             ?? null,
-    };
-  }
-  return map;
+  const prev = meta.previousClose ?? meta.chartPreviousClose ?? meta.regularMarketPrice;
+  const price = meta.regularMarketPrice;
+  return {
+    ticker,
+    price,
+    change:    price - prev,
+    changePct: ((price - prev) / prev) * 100,
+    volume:    meta.regularMarketVolume ?? null,
+    marketCap: meta.marketCap           ?? null,
+  };
 }
 
 module.exports = async function handler(req, res) {
+  // 2분 캐시 (종목 수 많아 매번 호출 부담)
   res.setHeader("Cache-Control", "s-maxage=120, stale-while-revalidate=60");
 
   try {
-    // 모든 티커 수집
+    // 전체 티커 목록 수집
     const allTickers = new Set();
     for (const cfg of Object.values(SECTOR_STOCKS)) {
       allTickers.add(cfg.etf);
-      cfg.leaders.forEach(s => allTickers.add(s.ticker));
-      cfg.trickle.forEach(s => allTickers.add(s.ticker));
+      cfg.leaders.forEach(s => allTickers.add(s.t));
+      cfg.trickle.forEach(s => allTickers.add(s.t));
     }
 
-    // 50개씩 나눠서 batch fetch (Yahoo Finance URL 길이 제한)
-    const tickerArr   = [...allTickers];
-    const chunkSize   = 50;
-    const chunks      = [];
-    for (let i = 0; i < tickerArr.length; i += chunkSize) {
-      chunks.push(tickerArr.slice(i, i + chunkSize));
-    }
-
-    const chunkResults = await Promise.allSettled(chunks.map(batchQuote));
+    // 20개씩 나눠 병렬 fetch (rate limit 대응)
+    const tickerArr = [...allTickers];
+    const CHUNK = 20;
     const quoteMap = {};
-    for (const r of chunkResults) {
-      if (r.status === "fulfilled") Object.assign(quoteMap, r.value);
+
+    for (let i = 0; i < tickerArr.length; i += CHUNK) {
+      const batch = tickerArr.slice(i, i + CHUNK);
+      const results = await Promise.allSettled(batch.map(fetchQuote));
+      for (const r of results) {
+        if (r.status === "fulfilled") quoteMap[r.value.ticker] = r.value;
+        else console.error(r.reason?.message);
+      }
     }
 
-    // 섹터별로 재구성
+    // 섹터별 재구성
     const sectors = {};
-    for (const [sectorName, cfg] of Object.entries(SECTOR_STOCKS)) {
-      const etfQ = quoteMap[cfg.etf] || null;
+    for (const [name, cfg] of Object.entries(SECTOR_STOCKS)) {
+      const etfQ = quoteMap[cfg.etf];
 
-      const mapStock = (s) => {
-        const q = quoteMap[s.ticker];
-        if (!q) return { ...s, price: null, changePct: null, vsEtf: null };
+      const mapStock = ({ t, n }) => {
+        const q = quoteMap[t];
+        if (!q) return { ticker: t, name: n, price: null, changePct: null, vsEtf: null, marketCap: null };
         const vsEtf = (q.changePct != null && etfQ?.changePct != null)
-          ? q.changePct - etfQ.changePct
-          : null;
-        return { ...s, price: q.price, changePct: q.changePct, change: q.change,
-                 volume: q.volume, marketCap: q.marketCap, vsEtf };
+          ? q.changePct - etfQ.changePct : null;
+        return { ticker: t, name: n, price: q.price, change: q.change,
+                 changePct: q.changePct, vsEtf, marketCap: q.marketCap };
       };
 
-      sectors[sectorName] = {
-        etf:     { ticker: cfg.etf, price: etfQ?.price, changePct: etfQ?.changePct },
+      sectors[name] = {
+        etf:     { ticker: cfg.etf, price: etfQ?.price ?? null, changePct: etfQ?.changePct ?? null },
         leaders: cfg.leaders.map(mapStock),
         trickle: cfg.trickle.map(mapStock),
       };
     }
 
-    res.status(200).json({ sectors, timestamp: new Date().toISOString() });
+    const fetched = Object.keys(quoteMap).length;
+    res.status(200).json({ sectors, fetched, total: tickerArr.length, timestamp: new Date().toISOString() });
 
   } catch (err) {
     console.error("[/api/stocks]", err.message);
