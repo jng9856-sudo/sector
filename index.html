@@ -260,6 +260,76 @@
       margin-bottom: 10px; padding-bottom: 8px;
       border-bottom: 1px solid var(--border);
     }
+
+    /* ── 섹터 종목 탭 */
+    .sector-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+      gap: 16px;
+    }
+    .sector-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+      transition: border-color 0.2s;
+    }
+    .sector-card:hover { border-color: var(--accent); }
+    .sector-card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 16px;
+      background: var(--bg-mid);
+      border-bottom: 1px solid var(--border);
+    }
+    .sc-title { font-size: 14px; font-weight: 700; }
+    .sc-etf   { font-size: 12px; color: var(--muted); }
+    .sc-pct   { font-size: 14px; font-weight: 700; }
+    .stock-section { padding: 10px 14px; }
+    .stock-section-label {
+      font-size: 10px; font-weight: 700; letter-spacing: 0.8px;
+      color: var(--muted); margin-bottom: 8px; text-transform: uppercase;
+    }
+    .stock-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 5px 0;
+      border-bottom: 1px solid rgba(48,54,61,0.5);
+    }
+    .stock-row:last-child { border-bottom: none; }
+    .sr-ticker {
+      font-size: 12px; font-weight: 700; min-width: 48px;
+      color: var(--text);
+    }
+    .sr-name  { font-size: 11px; color: var(--muted); flex: 1;
+                 overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .sr-price { font-size: 12px; color: var(--text); min-width: 52px; text-align: right; }
+    .sr-pct   { font-size: 12px; font-weight: 700; min-width: 54px; text-align: right; }
+    .sr-vs    { font-size: 10px; min-width: 52px; text-align: right; }
+    .sr-bar-wrap { width: 50px; height: 4px; background: var(--border); border-radius: 2px; }
+    .sr-bar { height: 4px; border-radius: 2px; }
+    .divider { height: 1px; background: var(--border); margin: 4px 14px; }
+    .trickle-label {
+      font-size: 10px; color: #ffa726; font-weight: 700;
+      letter-spacing: 0.6px; text-transform: uppercase;
+    }
+    .stock-controls {
+      display: flex; align-items: center; gap: 12px;
+      margin-bottom: 16px; flex-wrap: wrap;
+    }
+    .sort-btn {
+      padding: 5px 14px;
+      border-radius: 20px;
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--muted); font-size: 12px; cursor: pointer;
+    }
+    .sort-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+    .loading-stocks {
+      text-align: center; padding: 60px; color: var(--muted); font-size: 14px;
+    }
   </style>
 </head>
 <body>
@@ -292,6 +362,7 @@
   <button class="tab-btn"        data-tab="relative">📈 상대성과</button>
   <button class="tab-btn"        data-tab="ranking">🏆 모멘텀 순위</button>
   <button class="tab-btn"        data-tab="nasdaq">📡 나스닥 현황</button>
+  <button class="tab-btn"        data-tab="stocks">🏢 섹터 종목</button>
 </div>
 
 <!-- ── 콘텐츠 -->
@@ -359,6 +430,30 @@
       💡 <b>나스닥 현황</b>은 60초마다 자동 갱신됩니다 (Yahoo Finance 15분 지연).
       VIX 20↑ = 시장 불안 구간, 30↑ = 공포 구간.
       장전(Pre) 큰 갭 = 당일 변동성 주의.
+    </div>
+  </div>
+
+  <!-- 섹터 종목 탭 -->
+  <div class="tab-pane" id="pane-stocks">
+    <div class="stock-controls">
+      <div class="ctrl-group">
+        <label>정렬 기준</label>
+        <div class="period-btns">
+          <button class="sort-btn active" data-sort="changePct">당일 등락률</button>
+          <button class="sort-btn"        data-sort="vsEtf">ETF 대비 초과</button>
+          <button class="sort-btn"        data-sort="marketCap">시가총액</button>
+        </div>
+      </div>
+      <button id="stocks-refresh-btn" style="padding:8px 20px;background:var(--accent);color:#fff;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;">🔄 새로고침</button>
+      <span id="stocks-update" style="font-size:11px;color:var(--muted);align-self:center;"></span>
+    </div>
+    <div id="stocks-grid" class="sector-grid">
+      <div class="loading-stocks">⏳ 종목 데이터 로딩 중...</div>
+    </div>
+    <div class="tip" style="margin-top:16px;">
+      💡 <b>대표주(Leaders)</b> = 섹터 ETF 구성 핵심 종목 &nbsp;|&nbsp;
+      <b style="color:#ffa726">낙수효과(Trickle-down)</b> = 섹터 상승 시 후행하여 수혜받는 중소형주<br>
+      <b>vs ETF</b> = 해당 종목이 섹터 ETF 대비 얼마나 더/덜 올랐는지 (초과수익률)
     </div>
   </div>
 </div>
@@ -787,6 +882,7 @@ function renderActiveTab() {
   if (t === "rrg")      renderRRG();
   if (t === "relative") renderRelativePerf();
   if (t === "ranking")  renderRanking();
+  if (t === "stocks")   renderSectorStocks();
 }
 
 // ════════════════════════════════════════════════════
@@ -1082,6 +1178,116 @@ async function renderNasdaq() {
   renderIntradayChart();
   renderNewsFeed();
 }
+
+
+// ════════════════════════════════════════════════════
+// ⑨  섹터 종목 탭
+// ════════════════════════════════════════════════════
+let stocksState = { data: null, sort: "changePct" };
+
+async function fetchStocks() {
+  try {
+    const res = await fetch("/api/stocks");
+    if (!res.ok) throw new Error("API " + res.status);
+    stocksState.data = await res.json();
+    const el = document.getElementById("stocks-update");
+    if (el) el.textContent = "최종 갱신: " + new Date(stocksState.data.timestamp).toLocaleString("ko-KR");
+  } catch (err) {
+    console.error("[stocks]", err.message);
+  }
+}
+
+function fmtPrice(v)  { return v != null ? "$" + Number(v).toFixed(2) : "–"; }
+function fmtPct2(v)   { return v != null ? (v >= 0 ? "+" : "") + v.toFixed(2) + "%" : "–"; }
+function pctColor(v)  { return v == null ? "var(--muted)" : v >= 0 ? "#69db8f" : "#f58579"; }
+
+function stockRow(s, etfPct, sortKey) {
+  const pct    = s.changePct;
+  const vsEtf  = s.vsEtf;
+  const barMax = 5;  // ±5% 기준 바 너비
+  const barPct = pct != null ? Math.min(Math.abs(pct) / barMax * 100, 100) : 0;
+  const barCol = pct != null ? (pct >= 0 ? "#3fb950" : "#f85149") : "#30363d";
+
+  const vsStr  = vsEtf != null
+    ? `<span style="color:${pctColor(vsEtf)}">${fmtPct2(vsEtf)}</span>`
+    : "<span style='color:var(--muted)'>–</span>";
+
+  return `<div class="stock-row">
+    <span class="sr-ticker">${s.ticker}</span>
+    <span class="sr-name" title="${s.name}">${s.name}</span>
+    <span class="sr-price">${fmtPrice(s.price)}</span>
+    <span class="sr-pct" style="color:${pctColor(pct)}">${fmtPct2(pct)}</span>
+    <span class="sr-vs">${vsStr}</span>
+    <div class="sr-bar-wrap"><div class="sr-bar" style="width:${barPct}%;background:${barCol}"></div></div>
+  </div>`;
+}
+
+function sortStocks(arr) {
+  const key = stocksState.sort;
+  return [...arr].sort((a, b) => {
+    const av = a[key] ?? -Infinity;
+    const bv = b[key] ?? -Infinity;
+    return bv - av;
+  });
+}
+
+function renderSectorStocks() {
+  const grid = document.getElementById("stocks-grid");
+  if (!grid) return;
+  if (!stocksState.data) {
+    grid.innerHTML = `<div class="loading-stocks">⏳ 데이터 로딩 중...</div>`;
+    fetchStocks().then(renderSectorStocks);
+    return;
+  }
+
+  const { sectors } = stocksState.data;
+  grid.innerHTML = Object.entries(sectors).map(([name, sec]) => {
+    const etfPct  = sec.etf.changePct;
+    const etfCol  = pctColor(etfPct);
+    const leaders = sortStocks(sec.leaders);
+    const trickle = sortStocks(sec.trickle);
+
+    return `<div class="sector-card">
+      <div class="sector-card-header">
+        <div>
+          <div class="sc-title">${name}</div>
+          <div class="sc-etf">${sec.etf.ticker}  ${fmtPrice(sec.etf.price)}</div>
+        </div>
+        <div class="sc-pct" style="color:${etfCol}">${fmtPct2(etfPct)}</div>
+      </div>
+
+      <div class="stock-section">
+        <div class="stock-section-label">대표주 (Leaders)</div>
+        ${leaders.map(s => stockRow(s, etfPct, stocksState.sort)).join("")}
+      </div>
+
+      <div class="divider"></div>
+
+      <div class="stock-section">
+        <div class="stock-section-label trickle-label">⬇ 낙수효과 수혜주 (Trickle-down)</div>
+        ${trickle.map(s => stockRow(s, etfPct, stocksState.sort)).join("")}
+      </div>
+    </div>`;
+  }).join("");
+}
+
+// 정렬 버튼
+document.querySelectorAll(".sort-btn").forEach(btn => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll(".sort-btn").forEach(b => b.classList.remove("active"));
+    btn.classList.add("active");
+    stocksState.sort = btn.dataset.sort;
+    renderSectorStocks();
+  });
+});
+
+// 새로고침 버튼
+document.getElementById("stocks-refresh-btn")?.addEventListener("click", async () => {
+  document.getElementById("stocks-grid").innerHTML =
+    `<div class="loading-stocks">⏳ 새로고침 중...</div>`;
+  await fetchStocks();
+  renderSectorStocks();
+});
 
 // 최초 로드
 (async () => {
